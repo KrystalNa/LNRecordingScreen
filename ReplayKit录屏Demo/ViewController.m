@@ -8,6 +8,7 @@
 
 #import "ViewController.h"
 #import <ReplayKit/ReplayKit.h>
+#import <Photos/Photos.h>
 
 @interface ViewController ()<RPScreenRecorderDelegate, RPPreviewViewControllerDelegate>
 {
@@ -284,7 +285,44 @@
 }
 
 - (void)uploadVideoAsyn{
+    [self saveVideoSuccess:^{
+        NSLog(@"保存沙盒成功,上传到服务器即可");
+    }];
+}
 
+- (void)saveVideoSuccess:(void(^)())success{
+    //获取最近一次的相册图片/视频的信息PHAsset
+    PHFetchOptions *options = [[PHFetchOptions alloc] init];
+    options.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
+    options.includeAssetSourceTypes = PHAssetSourceTypeNone;//默认相册
+    PHFetchResult *assetsFetchResults = [PHAsset fetchAssetsWithOptions:options];
+    PHAsset *asset = [assetsFetchResults firstObject];
+    PHAssetResource *assetRescource = [[PHAssetResource assetResourcesForAsset:asset] firstObject];
+    
+    //创建保存到沙盒的路径
+    NSString *uuidString = [[NSUUID UUID] UUIDString];
+    NSString *fileName = uuidString;
+    NSString *documentPath = [NSString stringWithFormat:@"%@/photosFile", [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject]];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    BOOL isDir= NO;
+    BOOL existed = [fileManager fileExistsAtPath:documentPath isDirectory:&isDir];
+    if (!(existed&&isDir)){
+        [fileManager createDirectoryAtPath:documentPath withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    NSString *filePath=[documentPath stringByAppendingPathComponent:fileName];
+    
+    //保存到沙盒
+    __weak typeof(self) weakSelf = self;
+    PHAssetResourceManager *manager = [PHAssetResourceManager defaultManager];
+    [manager writeDataForAssetResource:assetRescource toFile:[NSURL fileURLWithPath:filePath] options:nil completionHandler:^(NSError * _Nullable error) {
+        if (error==nil) {
+            if(success)success();
+            NSLog(@"保存沙盒成功");
+        }else{
+            [weakSelf saveVideoSuccess:success];
+            NSLog(@"保存沙盒失败,重新尝试");
+        }
+    }];
 }
 
 - (void)didReceiveMemoryWarning {
